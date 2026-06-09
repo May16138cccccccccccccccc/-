@@ -1,0 +1,243 @@
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-sans); }
+  .scene { padding: 1.5rem 1rem; }
+  .title { font-size: 15px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 4px; }
+  .sub { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 1.5rem; }
+
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.5rem; align-items: center; }
+  .controls input { flex: 1; min-width: 120px; font-size: 13px; padding: 0 10px; height: 36px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: var(--color-background-primary); color: var(--color-text-primary); outline: none; }
+  .controls input:focus { border-color: var(--color-border-primary); }
+  .btn { height: 36px; padding: 0 14px; font-size: 13px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: transparent; color: var(--color-text-primary); cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: var(--color-background-secondary); }
+  .btn.danger { border-color: #E24B4A44; color: #A32D2D; }
+  .btn.danger:hover { background: #FCEBEB; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
+  .stat { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 10px 12px; }
+  .stat-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; }
+  .stat-val { font-size: 20px; font-weight: 500; color: var(--color-text-primary); }
+  .stat-val.warn { color: #BA7517; }
+  .stat-val.danger { color: #A32D2D; }
+
+  .capacity-bar-wrap { margin-bottom: 1.5rem; }
+  .cap-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px; display: flex; justify-content: space-between; }
+  .cap-track { height: 6px; background: var(--color-background-secondary); border-radius: 3px; overflow: hidden; }
+  .cap-fill { height: 100%; border-radius: 3px; background: #1D9E75; transition: width .4s, background .4s; }
+  .cap-fill.warn { background: #BA7517; }
+  .cap-fill.danger { background: #E24B4A; }
+
+  .buckets { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+  .bucket { border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); background: var(--color-background-primary); padding: 6px 4px; min-height: 56px; }
+  .bucket.highlight { border-color: #1D9E75; background: #E1F5EE; }
+  .bucket-idx { font-size: 10px; color: var(--color-text-tertiary); text-align: center; margin-bottom: 4px; font-family: var(--font-mono); }
+  .bucket.highlight .bucket-idx { color: #0F6E56; }
+
+  .entry { font-size: 10px; border-radius: 4px; padding: 2px 4px; margin-bottom: 3px; word-break: break-all; line-height: 1.35; }
+  .entry.chain-0 { background: #E6F1FB; color: #0C447C; }
+  .entry.chain-1 { background: #EEEDFE; color: #3C3489; }
+  .entry.chain-2 { background: #FAC775; color: #633806; }
+  .entry.chain-red { background: #FAEEDA; color: #633806; border: 0.5px solid #EF9F27; }
+  .entry.new { animation: pop .35s ease; }
+  .tree-badge { font-size: 9px; background: #FAEEDA; color: #633806; border-radius: 3px; padding: 1px 4px; margin-bottom: 2px; display: inline-block; }
+
+  @keyframes pop { 0%{transform:scale(0.6);opacity:0} 60%{transform:scale(1.08)} 100%{transform:scale(1);opacity:1} }
+
+  .log { margin-top: 1.25rem; }
+  .log-title { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px; }
+  .log-list { max-height: 90px; overflow-y: auto; }
+  .log-item { font-size: 11px; font-family: var(--font-mono); color: var(--color-text-secondary); padding: 2px 0; border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .log-item.ok { color: #0F6E56; }
+  .log-item.warn { color: #BA7517; }
+  .log-item.exp { color: #185FA5; }
+
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 1rem; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--color-text-secondary); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+</style>
+
+<div class="scene">
+  <h2 class="sr-only">HashMap 信箱系统可视化 — 展示哈希分桶、冲突链表、红黑树升级和扩容机制</h2>
+  <div class="title">村子信箱系统 — HashMap 底层原理</div>
+  <div class="sub">输入姓名投信，观察哈希分桶、冲突、链表→红黑树升级、扩容</div>
+
+  <div class="controls">
+    <input type="text" id="key-input" placeholder="姓名 (key)，如：张三" maxlength="12">
+    <input type="text" id="val-input" placeholder="信件内容 (value)" maxlength="10">
+    <button class="btn" onclick="insertEntry()">投信 ↗</button>
+    <button class="btn danger" onclick="resetAll()">清空</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="stat-label">信件总数</div><div class="stat-val" id="s-size">0</div></div>
+    <div class="stat"><div class="stat-label">信箱容量</div><div class="stat-val" id="s-cap">16</div></div>
+    <div class="stat"><div class="stat-label">装载率</div><div class="stat-val" id="s-load">0%</div></div>
+    <div class="stat"><div class="stat-label">扩容次数</div><div class="stat-val" id="s-rehash">0</div></div>
+  </div>
+
+  <div class="capacity-bar-wrap">
+    <div class="cap-label">
+      <span>装载率（超过75%自动扩容）</span>
+      <span id="cap-pct">0 / 16</span>
+    </div>
+    <div class="cap-track"><div class="cap-fill" id="cap-fill" style="width:0%"></div></div>
+  </div>
+
+  <div class="buckets" id="buckets"></div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#B5D4F4"></div>链表第1个</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#AFA9EC"></div>链表第2个</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#FAC775"></div>链表第3个+</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#FAEEDA;border:0.5px solid #EF9F27"></div>红黑树节点（≥3个演示）</div>
+  </div>
+
+  <div class="log">
+    <div class="log-title">操作日志</div>
+    <div class="log-list" id="log-list"></div>
+  </div>
+</div>
+
+<script>
+  const LOAD_FACTOR = 0.75;
+  const TREE_THRESHOLD = 3; // 演示用3，真实是8
+  let capacity = 16;
+  let table = {};
+  let totalSize = 0;
+  let rehashCount = 0;
+  let logs = [];
+
+  function hashCode(str) {
+    let h = 0;
+    for (let i = 0; i < str.length; i++) {
+      h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+    }
+    return Math.abs(h);
+  }
+
+  function getIndex(key, cap) {
+    return hashCode(key) % cap;
+  }
+
+  function log(msg, type='ok') {
+    logs.unshift({ msg, type });
+    if (logs.length > 20) logs.pop();
+    renderLog();
+  }
+
+  function renderLog() {
+    const el = document.getElementById('log-list');
+    el.innerHTML = logs.map(l => `<div class="log-item ${l.type}">${l.msg}</div>`).join('');
+  }
+
+  function renderBuckets(highlightIdx = -1) {
+    const el = document.getElementById('buckets');
+    const cols = capacity <= 16 ? 8 : (capacity <= 32 ? 8 : 8);
+    el.style.gridTemplateColumns = `repeat(${Math.min(capacity, 8)}, 1fr)`;
+    let html = '';
+    for (let i = 0; i < capacity; i++) {
+      const isHL = i === highlightIdx;
+      const entries = table[i] || [];
+      const isTree = entries.length >= TREE_THRESHOLD;
+      html += `<div class="bucket${isHL ? ' highlight' : ''}">`;
+      html += `<div class="bucket-idx">${i}</div>`;
+      if (isTree) html += `<div class="tree-badge">🌲 红黑树</div>`;
+      entries.forEach((e, ci) => {
+        const cls = isTree ? 'chain-red' : ['chain-0','chain-1','chain-2'][Math.min(ci,2)];
+        html += `<div class="entry ${cls}${isHL && e.isNew ? ' new' : ''}">${e.key}: ${e.val}</div>`;
+      });
+      html += `</div>`;
+    }
+    el.innerHTML = html;
+  }
+
+  function updateStats() {
+    const load = totalSize / capacity;
+    const pct = Math.round(load * 100);
+    document.getElementById('s-size').textContent = totalSize;
+    document.getElementById('s-cap').textContent = capacity;
+    const loadEl = document.getElementById('s-load');
+    loadEl.textContent = pct + '%';
+    loadEl.className = 'stat-val' + (load >= 0.75 ? ' danger' : load >= 0.5 ? ' warn' : '');
+    document.getElementById('s-rehash').textContent = rehashCount;
+    document.getElementById('cap-pct').textContent = `${totalSize} / ${capacity}`;
+    const fillEl = document.getElementById('cap-fill');
+    fillEl.style.width = Math.min(pct, 100) + '%';
+    fillEl.className = 'cap-fill' + (load >= 0.75 ? ' danger' : load >= 0.5 ? ' warn' : '');
+  }
+
+  function rehash() {
+    const old = { ...table };
+    capacity *= 2;
+    rehashCount++;
+    table = {};
+    for (const idx in old) {
+      old[idx].forEach(e => {
+        e.isNew = false;
+        const ni = getIndex(e.key, capacity);
+        if (!table[ni]) table[ni] = [];
+        table[ni].push(e);
+      });
+    }
+    log(`🔄 扩容！容量→${capacity}，触发 rehash，所有信件重新分配`, 'exp');
+  }
+
+  function insertEntry() {
+    const k = document.getElementById('key-input').value.trim();
+    const v = document.getElementById('val-input').value.trim() || '信件';
+    if (!k) { document.getElementById('key-input').focus(); return; }
+
+    const idx = getIndex(k, capacity);
+    if (!table[idx]) table[idx] = [];
+
+    const existing = table[idx].find(e => e.key === k);
+    if (existing) {
+      existing.val = v;
+      existing.isNew = true;
+      log(`✏️ 更新 [${k}] → ${v}（桶#${idx}）`, 'warn');
+    } else {
+      table[idx].forEach(e => e.isNew = false);
+      table[idx].push({ key: k, val: v, isNew: true });
+      totalSize++;
+      const chain = table[idx].length;
+      if (chain >= TREE_THRESHOLD) {
+        log(`🌲 桶#${idx} 链表→红黑树（${chain}个节点，演示阈值3）`, 'warn');
+      } else if (chain > 1) {
+        log(`⛓️ 哈希冲突！[${k}] 挂入桶#${idx} 链表（第${chain}个）`, 'warn');
+      } else {
+        log(`✅ [${k}] → 桶#${idx}（hash=${hashCode(k)} % ${capacity}）`, 'ok');
+      }
+    }
+
+    renderBuckets(idx);
+    updateStats();
+
+    if (totalSize > capacity * LOAD_FACTOR) {
+      setTimeout(() => {
+        rehash();
+        renderBuckets();
+        updateStats();
+      }, 400);
+    }
+
+    document.getElementById('key-input').value = '';
+    document.getElementById('val-input').value = '';
+    document.getElementById('key-input').focus();
+  }
+
+  function resetAll() {
+    table = {}; totalSize = 0; rehashCount = 0; capacity = 16; logs = [];
+    renderBuckets(); updateStats(); renderLog();
+  }
+
+  document.getElementById('key-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('val-input').focus();
+  });
+  document.getElementById('val-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') insertEntry();
+  });
+
+  renderBuckets();
+  updateStats();
+</script>
