@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>synchronized vs ReentrantLock - 门禁系统对比</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            background: linear-gradient(145deg, #e0e7f0 0%, #cfdbe8 100%);
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 24px;
+        }
+        .card {
+            max-width: 1400px;
+            width: 100%;
+            background: #fff9f0;
+            border-radius: 48px;
+            box-shadow: 0 20px 36px rgba(0,0,0,0.2);
+            overflow: hidden;
+            transition: all 0.2s;
+        }
+        .header {
+            background: #2e3b2c;
+            color: #f9eec1;
+            padding: 20px 28px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2rem;
+            letter-spacing: 2px;
+        }
+        .header p {
+            margin: 8px 0 0;
+            opacity: 0.85;
+            font-size: 0.9rem;
+        }
+        .compare-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 24px;
+            padding: 32px 24px;
+            background: #ece3d4;
+        }
+        .panel {
+            flex: 1;
+            min-width: 280px;
+            background: #ffffffd9;
+            border-radius: 32px;
+            box-shadow: 0 8px 18px rgba(0,0,0,0.1);
+            overflow: hidden;
+            backdrop-filter: blur(2px);
+            transition: transform 0.1s;
+        }
+        .panel h2 {
+            text-align: center;
+            margin: 0;
+            padding: 18px 0;
+            font-weight: bold;
+            font-size: 1.8rem;
+        }
+        .panel.sync h2 {
+            background: #b97f44;
+            color: white;
+        }
+        .panel.lock h2 {
+            background: #3a6b4b;
+            color: white;
+        }
+        .content {
+            padding: 20px 22px;
+        }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 24px 0;
+        }
+        .feature-list li {
+            padding: 10px 0;
+            border-bottom: 1px solid #f0e0c0;
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+            font-size: 0.95rem;
+        }
+        .feature-icon {
+            font-size: 1.3rem;
+            min-width: 32px;
+            text-align: center;
+        }
+        .badge {
+            background: #e9e3d0;
+            padding: 2px 12px;
+            border-radius: 60px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+        .story-scene {
+            background: #fef5e6;
+            border-radius: 24px;
+            padding: 16px;
+            margin-top: 20px;
+            border-left: 8px solid #e2b87a;
+        }
+        .story-scene h3 {
+            margin: 0 0 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        button {
+            background: #5f4c38;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 60px;
+            font-weight: bold;
+            margin-top: 12px;
+            cursor: pointer;
+            transition: 0.08s linear;
+        }
+        button:active {
+            transform: scale(0.96);
+        }
+        .footer {
+            background: #dac292;
+            text-align: center;
+            padding: 14px;
+            font-size: 0.8rem;
+            color: #2d241a;
+        }
+        .code-snip {
+            background: #1e2a2a;
+            color: #c3e88d;
+            font-family: monospace;
+            padding: 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            margin-top: 12px;
+            overflow-x: auto;
+        }
+        @media (max-width: 800px) {
+            .compare-container {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="header">
+        <h1>🔐 synchronized vs ReentrantLock</h1>
+        <p>小区门禁故事 · 并发锁的两种哲学</p>
+    </div>
+
+    <div class="compare-container">
+        <!-- 左侧 synchronized 面板 -->
+        <div class="panel sync">
+            <h2>🚪 老式刷卡门禁<br><span style="font-size:0.8rem;">synchronized (内置锁)</span></h2>
+            <div class="content">
+                <ul class="feature-list">
+                    <li><span class="feature-icon">✅</span> 自动开门/关门 (自动加锁/释放锁)</li>
+                    <li><span class="feature-icon">⛔</span> 不能打断等待 → 干等</li>
+                    <li><span class="feature-icon">⚖️</span> 非公平锁 (默认不公平，抢着进)</li>
+                    <li><span class="feature-icon">🎭</span> 单一条件 (wait/notify)</li>
+                    <li><span class="feature-icon">📦</span> 可重入 (同一线程可重复进入)</li>
+                    <li><span class="feature-icon">🚫</span> 无尝试锁机制</li>
+                </ul>
+                <div class="story-scene">
+                    <h3>🏘️ 生活场景</h3>
+                    <p>📌 <strong>老旧小区大门</strong>：你刷卡进入，门自动关上。如果前面有人长时间占着门（比如搬货），你只能在后面干等，不能喊“不等了”。<br>
+                    ➕ 优点：简单，无需操心解锁。缺点：不够灵活。</p>
+                    <div class="code-snip">
+                        // synchronized 用法<br>
+                        synchronized(lock) {<br>
+                        &nbsp;&nbsp; // 自动获取锁，退出自动释放<br>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧 ReentrantLock 面板 -->
+        <div class="panel lock">
+            <h2>📱 智能遥控门禁<br><span style="font-size:0.8rem;">ReentrantLock (API锁)</span></h2>
+            <div class="content">
+                <ul class="feature-list">
+                    <li><span class="feature-icon">✋</span> 手动 lock() / unlock() (需finally释放)</li>
+                    <li><span class="feature-icon">⏸️</span> 可中断 (lockInterruptibly) 等不及可放弃</li>
+                    <li><span class="feature-icon">⚖️</span> 可选公平锁 (先来后到)</li>
+                    <li><span class="feature-icon">🎭🎭</span> 多条件 (多个Condition，更精细)</li>
+                    <li><span class="feature-icon">📦</span> 可重入 (同一线程可多次lock)</li>
+                    <li><span class="feature-icon">🔍</span> tryLock() 非阻塞尝试</li>
+                </ul>
+                <div class="story-scene">
+                    <h3>🏘️ 生活场景</h3>
+                    <p>📌 <strong>现代智能门禁</strong>：你需要按遥控锁门(lock)，走时必须按解锁(unlock)。如果门被占用太久，你可以按“中断”按钮不等了；还可以设置排队顺序(公平锁)，甚至绑定多个信号(比如等快递、等外卖)。<br>
+                    ➕ 优点：灵活、强大。缺点：必须记得解锁，否则门永远锁死。</p>
+                    <div class="code-snip">
+                        // ReentrantLock 用法<br>
+                        Lock lock = new ReentrantLock();<br>
+                        lock.lock();<br>
+                        try {<br>
+                        &nbsp;&nbsp; // 临界区<br>
+                        } finally {<br>
+                        &nbsp;&nbsp; lock.unlock();<br>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 一个动态小实验：模拟可中断 vs 不可中断 -->
+    <div style="padding: 8px 24px 24px 24px; background: #ece3d4;">
+        <div style="background: #e8dccc; border-radius: 24px; padding: 16px; margin-top: 0;">
+            <h3 style="margin: 0 0 12px 0;">🔬 小实验：感受“可中断”与“不可中断”</h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 24px; justify-content: space-between;">
+                <div style="flex:1; background:#fff0db; border-radius: 24px; padding: 12px;">
+                    <strong>🚪 synchronized 模拟</strong>
+                    <p style="font-size:0.8rem;">线程1 占用锁 → 线程2 等待，无法中断，只能傻等。</p>
+                    <button id="syncBlockBtn" style="background:#b97f44;">🚫 启动不可中断示例</button>
+                    <div id="syncMsg" style="margin-top: 12px; font-size:0.75rem; font-family: monospace;"></div>
+                </div>
+                <div style="flex:1; background:#e2f0e2; border-radius: 24px; padding: 12px;">
+                    <strong>📱 ReentrantLock 模拟 (可中断)</strong>
+                    <p style="font-size:0.8rem;">线程A 持有锁 → 线程B 等待，1秒后打断B，B放弃等待。</p>
+                    <button id="lockInterruptBtn" style="background:#3a6b4b;">🔔 启动可中断示例</button>
+                    <div id="lockMsg" style="margin-top: 12px; font-size:0.75rem; font-family: monospace;"></div>
+                </div>
+            </div>
+            <p style="font-size:0.7rem; margin-top: 16px; text-align:center;">※ 演示目的：ReentrantLock 可以响应中断，synchronized 不行。</p>
+        </div>
+    </div>
+
+    <div class="footer">
+        ⚡ 总结：synchronized 简单省心；ReentrantLock 灵活强大（可中断、尝试锁、公平锁、多条件）
+    </div>
+</div>
+
+<script>
+    // 实验部分模拟
+    const syncMsg = document.getElementById('syncMsg');
+    const lockMsg = document.getElementById('lockMsg');
+
+    // 模拟一个全局锁对象
+    let syncLock = {};
+
+    // synchronized 模拟 (不可中断)
+    let syncHold = false;
+    async function simulateSync() {
+        syncMsg.innerHTML = "🔄 启动 synchronized 实验...";
+        // 模拟第一个线程持有锁 (占用门禁)
+        if (window.syncTimer) clearTimeout(window.syncTimer);
+        // 模拟一个 “长期占锁” 的线程
+        syncHold = true;
+        syncMsg.innerHTML = "🚪 线程1 进入 synchronized 门禁，占锁 4 秒...<br>🔄 线程2 开始等待 (无法中断)";
+        // 开启第二个线程尝试获取同一个锁(模拟等待)
+        let secondStarted = false;
+        const occupyDuration = 4000;
+        setTimeout(() => {
+            if (syncHold) {
+                syncMsg.innerHTML += "<br>✅ 线程1 释放锁，线程2 获得锁(但没法提前中断) 演示结束。";
+                syncHold = false;
+            }
+        }, occupyDuration);
+        // 模拟第二个线程尝试获取（实际上在真实Java中第二个线程阻塞不可中断，这里我们延时模拟表现）
+        setTimeout(() => {
+            if (syncHold) {
+                syncMsg.innerHTML += "<br>⚠️ 线程2 正在阻塞... 没有中断按钮，只能等线程1释放锁。";
+            }
+        }, 500);
+    }
+
+    // ReentrantLock 模拟可中断
+    let lockHeld = false;
+    let interruptController = null;
+    async function simulateLockInterrupt() {
+        if (lockHeld) {
+            lockMsg.innerHTML = "⚠️ 已有实验在进行，请稍后...";
+            return;
+        }
+        lockMsg.innerHTML = "📱 启动 ReentrantLock 实验...<br>🔒 线程A 获取锁 (hold 4秒)";
+        lockHeld = true;
+        // 模拟线程A占用锁
+        let timerA = setTimeout(() => {
+            if (lockHeld) {
+                lockMsg.innerHTML += "<br>🔓 线程A 释放锁 (4秒结束)";
+                lockHeld = false;
+                if (interruptController) clearInterval(interruptController);
+            }
+        }, 4000);
+        // 模拟线程B尝试获取锁，并可被中断
+        let interrupted = false;
+        let waitStart = Date.now();
+        const waitInterval = setInterval(() => {
+            if (!lockHeld && !interrupted) {
+                lockMsg.innerHTML += "<br>✅ 线程B 获取锁成功 (未中断)";
+                clearInterval(waitInterval);
+                if (interruptController) clearTimeout(interruptController);
+                lockHeld = false;
+            } else if (!interrupted && lockHeld && (Date.now() - waitStart) > 2000) {
+                // 演示中断触发: 等待2秒后模拟中断请求
+                lockMsg.innerHTML += "<br>🔔 外部发起中断! 线程B 放弃等待 (lockInterruptibly 响应)";
+                interrupted = true;
+                clearInterval(waitInterval);
+                // 中断后不再等待
+                lockMsg.innerHTML += "<br>⏹️ 线程B 离开阻塞队列，做别的事情去了。实验结束 (未获取锁)";
+                if (interruptController) clearTimeout(interruptController);
+                // 不改变 lockHeld 继续让线程A释放即可
+            } else if (interrupted) {
+                clearInterval(waitInterval);
+            }
+        }, 300);
+        interruptController = setTimeout(() => {
+            // 2秒后自动模拟中断信号
+            if (lockHeld && !interrupted) {
+                // 中断由外部触发，已经在上面interval中处理，这里做备用触发
+                if (!interrupted) {
+                    lockMsg.innerHTML += "<br>🔔 自动中断信号 (2秒后)";
+                    interrupted = true;
+                    clearInterval(waitInterval);
+                }
+            }
+        }, 2200);
+        window.lockTimer = timerA;
+        window.lockInterval = waitInterval;
+    }
+
+    document.getElementById('syncBlockBtn').onclick = () => {
+        if (window.syncHoldFlag) return;
+        simulateSync();
+    };
+    document.getElementById('lockInterruptBtn').onclick = () => {
+        simulateLockInterrupt();
+    };
+    // 清理
+    window.addEventListener('beforeunload', () => {
+        if (window.lockTimer) clearTimeout(window.lockTimer);
+        if (window.lockInterval) clearInterval(window.lockInterval);
+    });
+</script>
+</body>
+</html>
