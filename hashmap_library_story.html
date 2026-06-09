@@ -1,0 +1,194 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+.wrap{padding:1.25rem 1rem;font-family:var(--font-sans)}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+.top-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:1rem}
+.top-row input{flex:1;min-width:100px;font-size:13px}
+.top-row button{font-size:13px;white-space:nowrap}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:1rem}
+.stat{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:8px 10px}
+.stat-label{font-size:11px;color:var(--color-text-secondary);margin-bottom:3px}
+.stat-val{font-size:18px;font-weight:500;color:var(--color-text-primary)}
+.stat-val.warn{color:#BA7517}
+.stat-val.danger{color:#A32D2D}
+.bar-row{margin-bottom:1rem}
+.bar-label{display:flex;justify-content:space-between;font-size:12px;color:var(--color-text-secondary);margin-bottom:5px}
+.bar-track{height:8px;background:var(--color-background-secondary);border-radius:4px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;background:#1D9E75;transition:width .4s,background .4s}
+.bar-fill.warn{background:#BA7517}
+.bar-fill.crit{background:#E24B4A}
+.shelf-label{font-size:12px;color:var(--color-text-secondary);margin-bottom:6px}
+.shelves{display:grid;gap:5px;margin-bottom:1rem}
+.slot{border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);background:var(--color-background-primary);padding:5px 7px;min-height:48px;transition:border-color .3s,background .3s}
+.slot.hit{border-color:#1D9E75;background:#E1F5EE}
+.slot.tree{border-color:#BA7517;background:#FAEEDA}
+.slot-idx{font-size:10px;color:var(--color-text-tertiary);font-family:var(--font-mono);margin-bottom:3px}
+.slot.hit .slot-idx{color:#0F6E56}
+.slot.tree .slot-idx{color:#854F0B}
+.book{font-size:10px;border-radius:3px;padding:2px 5px;margin-bottom:2px;line-height:1.4;word-break:break-all}
+.book.b0{background:#E6F1FB;color:#0C447C}
+.book.b1{background:#EEEDFE;color:#3C3489}
+.book.b2{background:#FAECE7;color:#712B13}
+.book.bt{background:#FAEEDA;color:#633806;border:0.5px solid #EF9F27}
+.tree-tag{font-size:9px;background:#FAC775;color:#633806;border-radius:3px;padding:1px 4px;margin-bottom:3px;display:inline-block}
+.book.pop{animation:pop .3s ease}
+@keyframes pop{0%{transform:scale(0.5);opacity:0}60%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+.log-wrap{margin-top:.5rem}
+.log-title{font-size:12px;color:var(--color-text-secondary);margin-bottom:5px}
+.log-box{max-height:80px;overflow-y:auto;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:5px 8px}
+.log-line{font-size:11px;font-family:var(--font-mono);padding:2px 0;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary)}
+.log-line:last-child{border-bottom:none}
+.log-line.ok{color:#0F6E56}
+.log-line.warn{color:#BA7517}
+.log-line.exp{color:#185FA5}
+.preset-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.75rem}
+.preset-row button{font-size:11px;padding:0 10px;height:28px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:transparent;color:var(--color-text-secondary);cursor:pointer}
+.preset-row button:hover{background:var(--color-background-secondary);color:var(--color-text-primary)}
+</style>
+
+<div class="wrap">
+<h2 class="sr-only">小镇图书馆 HashMap 演示 — 展示哈希定位、链表冲突、红黑树升级与扩容</h2>
+
+<div class="top-row">
+  <input type="text" id="k" placeholder="居民姓名（key）" maxlength="10">
+  <input type="text" id="v" placeholder="书名（value）" maxlength="10">
+  <button onclick="ins()">借书 / 放入</button>
+  <button onclick="reset()" style="color:var(--color-text-danger,#A32D2D)">清空书架</button>
+</div>
+
+<div class="preset-row">
+  <span style="font-size:11px;color:var(--color-text-secondary);align-self:center">快速演示：</span>
+  <button onclick="demo('conflict')">制造冲突</button>
+  <button onclick="demo('tree')">触发红黑树</button>
+  <button onclick="demo('expand')">触发扩容</button>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-label">书架格子</div><div class="stat-val" id="scap">16</div></div>
+  <div class="stat"><div class="stat-label">总书本数</div><div class="stat-val" id="ssize">0</div></div>
+  <div class="stat"><div class="stat-label">装载率</div><div class="stat-val" id="sload">0%</div></div>
+  <div class="stat"><div class="stat-label">扩容次数</div><div class="stat-val" id="srehash">0</div></div>
+</div>
+
+<div class="bar-row">
+  <div class="bar-label"><span>装载率进度（>75% 自动扩容）</span><span id="barlabel">0 / 16</span></div>
+  <div class="bar-track"><div class="bar-fill" id="barfill" style="width:0%"></div></div>
+</div>
+
+<div class="shelf-label" id="slabel">书架（16格）— 每格可放书 / 挂链表布袋 / 升级红黑树</div>
+<div class="shelves" id="shelves" style="grid-template-columns:repeat(8,1fr)"></div>
+
+<div class="log-wrap">
+  <div class="log-title">Map 先生操作日志</div>
+  <div class="log-box" id="logbox"></div>
+</div>
+</div>
+
+<script>
+let cap=16,table={},total=0,rehashes=0,logs=[];
+const TREE=3;
+
+function hash(s){let h=0;for(let i=0;i<s.length;i++)h=(Math.imul(31,h)+s.charCodeAt(i))|0;return Math.abs(h)}
+function idx(k,c){return hash(k)%c}
+
+function log(msg,t='ok'){logs.unshift({msg,t});if(logs.length>30)logs.pop();renderLog()}
+function renderLog(){
+  document.getElementById('logbox').innerHTML=logs.map(l=>`<div class="log-line ${l.t}">${l.msg}</div>`).join('');
+}
+
+function renderShelves(hi=-1){
+  const cols=cap<=16?8:(cap<=32?8:8);
+  const el=document.getElementById('shelves');
+  el.style.gridTemplateColumns=`repeat(${Math.min(cap,8)},1fr)`;
+  document.getElementById('slabel').textContent=`书架（${cap}格）— 每格可放书 / 挂链表布袋 / 升级红黑树`;
+  let html='';
+  for(let i=0;i<cap;i++){
+    const entries=table[i]||[];
+    const isTree=entries.length>=TREE;
+    const isHit=i===hi;
+    let cls='slot'+(isHit?' hit':'')+(isTree&&!isHit?' tree':'');
+    html+=`<div class="${cls}"><div class="slot-idx">#${i}</div>`;
+    if(isTree)html+=`<div class="tree-tag">红黑树</div>`;
+    entries.forEach((e,ci)=>{
+      const bc=isTree?'bt':['b0','b1','b2'][Math.min(ci,2)];
+      html+=`<div class="book ${bc}${e.fresh?' pop':''}">${e.k}:${e.v}</div>`;
+    });
+    html+='</div>';
+  }
+  el.innerHTML=html;
+}
+
+function updateStats(){
+  const load=total/cap;
+  const pct=Math.round(load*100);
+  document.getElementById('scap').textContent=cap;
+  document.getElementById('ssize').textContent=total;
+  const sl=document.getElementById('sload');
+  sl.textContent=pct+'%';
+  sl.className='stat-val'+(load>=0.75?' danger':load>=0.5?' warn':'');
+  document.getElementById('srehash').textContent=rehashes;
+  document.getElementById('barlabel').textContent=`${total} / ${cap}`;
+  const bf=document.getElementById('barfill');
+  bf.style.width=Math.min(pct,100)+'%';
+  bf.className='bar-fill'+(load>=0.75?' crit':load>=0.5?' warn':'');
+}
+
+function insert(k,v){
+  if(!k)return;
+  const i=idx(k,cap);
+  if(!table[i])table[i]=[];
+  Object.values(table).forEach(arr=>arr.forEach(e=>e.fresh=false));
+  const ex=table[i].find(e=>e.k===k);
+  if(ex){ex.v=v;ex.fresh=true;log(`✏️ 更新 [${k}] 位置#${i}，equals() 命中`,'warn')}
+  else{
+    table[i].push({k,v,fresh:true});total++;
+    const len=table[i].length;
+    if(len>=TREE)log(`🌲 #${i} 链表节点≥${TREE}，升级红黑树！查找 O(log n)`,'warn');
+    else if(len>1)log(`⛓️ 哈希冲突！[${k}] 挂入#${i} 布袋（第${len}本）`,'warn');
+    else log(`✅ [${k}] → hash=${hash(k)} % ${cap} = #${i}`,'ok');
+  }
+  renderShelves(i);
+  updateStats();
+  if(total>cap*0.75){
+    setTimeout(()=>{doRehash();renderShelves();updateStats();},500);
+  }
+}
+
+function doRehash(){
+  const old={...table};
+  cap*=2;rehashes++;
+  table={};
+  for(const idx in old)old[idx].forEach(e=>{e.fresh=false;const ni=hash(e.k)%cap;if(!table[ni])table[ni]=[];table[ni].push(e);});
+  log(`🔄 扩容！格子 → ${cap}，所有书 rehash 重新分配`,'exp');
+}
+
+function reset(){table={};total=0;rehashes=0;cap=16;logs=[];renderShelves();updateStats();renderLog();}
+
+function ins(){
+  const k=document.getElementById('k').value.trim();
+  const v=document.getElementById('v').value.trim()||'书';
+  if(!k){document.getElementById('k').focus();return}
+  insert(k,v);
+  document.getElementById('k').value='';document.getElementById('v').value='';
+  document.getElementById('k').focus();
+}
+
+function demo(type){
+  if(type==='conflict'){
+    const names=[['赵信','武功秘籍'],['钱多多','武功秘籍'],['孙悟空','紧箍咒'],['李白','诗集']];
+    let i=0;const t=setInterval(()=>{if(i>=names.length){clearInterval(t);return}insert(names[i][0],names[i][1]);i++;},400);
+  } else if(type==='tree'){
+    const ns=[['甲','书A'],['乙','书B'],['丙','书C'],['丁','书D']];
+    let i=0;const t=setInterval(()=>{if(i>=ns.length){clearInterval(t);return}insert(ns[i][0],ns[i][1]);i++;},350);
+  } else if(type==='expand'){
+    const residents=['张三','李四','王五','赵六','钱七','孙八','周九','吴十','郑十一','陈十二','褚十三','卫十四'];
+    let i=0;const t=setInterval(()=>{if(i>=residents.length){clearInterval(t);return}insert(residents[i],'书'+i);i++;},300);
+  }
+}
+
+document.getElementById('k').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('v').focus()});
+document.getElementById('v').addEventListener('keydown',e=>{if(e.key==='Enter')ins()});
+
+renderShelves();updateStats();
+</script>
